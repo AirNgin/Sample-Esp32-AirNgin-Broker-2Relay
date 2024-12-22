@@ -1,0 +1,12 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+UseTab: Never
+ColumnLimit: 80
+SortIncludes: true
+AllowShortIfStatementsOnASingleLine: false
+BreakBeforeBraces: Allman
+BraceWrapping:
+  AfterClass: true
+  AfterFunction: true
+  AfterControlStatement: false
+  BeforeElse: true
