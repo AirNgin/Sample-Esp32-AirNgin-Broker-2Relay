@@ -513,7 +513,7 @@ void CA_Trim(char inp[])
 }
 
 
-
+// متد تبدیل کاراکتر به رشته
 String CA_ToString(char input[], int start = 0, int len = 0)
 {
   int i, end = strlen(input);

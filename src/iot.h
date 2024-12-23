@@ -13,6 +13,10 @@
 bool _Reboot = true;
 bool _IOTCloudUse = false;
 bool _MqttRcv_IsWorking = false;
+
+// certificate : لازم برای دریافت فایل آپدیت از سرور OTA
+// ***** نکته *******
+// آپدیت ابزارها از راه دور در حال تکمیل است
 const String rootCACertificate = "-----BEGIN CERTIFICATE-----\n" \
 "MIIDuzCCAqOgAwIBAgIDBETAMA0GCSqGSIb3DQEBBQUAMH4xCzAJBgNVBAYTAlBM\n" \
 "MSIwIAYDVQQKExlVbml6ZXRvIFRlY2hub2xvZ2llcyBTLkEuMScwJQYDVQQLEx5D\n" \
@@ -38,7 +42,8 @@ const String rootCACertificate = "-----BEGIN CERTIFICATE-----\n" \
 
 bool _Update_Trying = false;
 
-
+// تنظیم زمان جهت دریافت آپدیت از سرور می باشد
+// SSL : برای آنکه در خواست ما مورد قبول باشد باید ساعت ابزار درخواست دهنده درست باشد. در غیر اینصورت درخواست شما ریجکت می باشد
 void SetClock(String UTC="") {
   struct tm timeinfo = {};
   if(UTC!=""){
@@ -75,6 +80,7 @@ void SetClock(String UTC="") {
 }
 
 
+// متد آپدیت فریمور که در حال تکمیل روند می باشیم
 
 void IOT__FirmwareUpdate(String DownloadLink, String Certificate = "", String UTC=""){
   if(_Update_Trying) return;
@@ -93,7 +99,6 @@ void IOT__FirmwareUpdate(String DownloadLink, String Certificate = "", String UT
           client, DownloadLink, "",
           [](HTTPClient *client)
           {
-              // client->setAuthorization("test", "password");
           }
       );
       switch (ret)
@@ -120,7 +125,7 @@ void IOT__FirmwareUpdate(String DownloadLink, String Certificate = "", String UT
 }
 
 
-
+// حلقه اصلی اتصال و حفظ اتصال به وای فای 
 void Network_RSSI() 
 {
   try{
@@ -135,16 +140,24 @@ void Network_RSSI()
     //...................................................................... Modem Is Valid
     else
     {
+      // دریافت کیفیت سیگنال اتصال ابزار به مودم یا روتر
       int rssi = WiFi.RSSI();
-      DEBUG_SERIAL_PRINTLN("Network_RSSI of Modem : "+String(rssi));
+      DEBUG_SERIAL_PRINTLN("Network_RSSI of Modem : "+String(rssi));پ
+      // اگر کیفیت سیگنال ضعیف باشد نیاز است به کاربر جهت اطلاع پیام دهیم
       if(rssi<-80) {
         if (_MqttCon_IsConnected)
         {
+          // MESSAGE_CLOUD_MODEM_WAKE : مقدار کد پیام می باشد که شما در پنل کاربری  خود تعریف کرده اید و باید مقدار آن را جایگزین کنید
+
+          // پیام از طریق نوتفیکیشن به کاربر مستر ارسال می شود
           if(_IOTCloudUse) MessageCloud__ViaMqtt_NotifyTo_User(MESSAGE_CLOUD_MODEM_WAKE);
-          // else for local_broker
+         
+          // اگر ابزار شما حساس می باشد می توانید از طریق پیامک نیز به کاربر اطلاع دهید که شامل هزینه برای کاربر است این ارسال
+          // if(_IOTCloudUse) MessageCloud__ViaMqtt_SMSTo_User(MESSAGE_CLOUD_MODEM_WAKE);
         }
         else{
-      #if HARDWARE_GSM
+      #if HARDWARE_GSM // این برای کارکردن ابزار توسط ماژول سیم کارت می باشد که به زودی تکمیل می شود
+                       // اگر ابزار شما ماژول پیامک ندارد از این کد چشم پوشی نمایید.
           if(_IOTCloudUse) MessageCloud__ViaGSM_NotifyTo_User(MESSAGE_CLOUD_MODEM_WAKE);
           // else for local_broker
       #endif
@@ -157,7 +170,7 @@ void Network_RSSI()
 
 
 
-
+// متد پینگ کرفتن که جهت کنترل و مدیریت اتصال به سرور بروکر استفاده می شود.
 bool Network_Ping(String remote_host)
 {
   DEBUG_SERIAL_PRINTLN("Wifi_Ping To " + remote_host);
@@ -180,7 +193,8 @@ bool Network_Ping(String remote_host)
 
 
 
-
+// از آنجایی که ممکن است مودم شما دسترسی یک ابزار را بلاک کرده باشد 
+// جهت رفع این مشکل یک بار وای فای داخلی میکرو کنترلر را ریست می نماییم
 void Network_Reset()
 {
   DEBUG_SERIAL_PRINTLN("\r\n************* Network_Reset!! ***************\r\n");
@@ -207,7 +221,7 @@ void Network_Reset()
 
 
 
-
+// فرآینده نگهداشت اتصال به سرور بروکر . اینترنت
 bool Network_HelthCheck()
 {
   // اگر mqtt تا 15 دقیقه اگر وصل نبود یک بار وی فای ریست شود
@@ -263,7 +277,7 @@ bool Network_HelthCheck()
 
 
 
-
+// جهت آگاهی کاربر مستر بعد از هر بار روشن شدن به کاربر مستر یک نوتفیکیشن ارسال می نماییم
 void Send_RebootAndStatus()
 {
   if (_Reboot)
@@ -295,7 +309,7 @@ void Send_RebootAndStatus()
 
 
 
-
+// متد اصلی اتصال به سرور بروکر می باشد
 void Mqtt__Connect()
 {
   if (_Mqtt_TryConnecting)
@@ -329,29 +343,24 @@ void Mqtt__Connect()
         delay(10);
         DEBUG_SERIAL_PRINTLN("Mqtt_Connect Success Status :: " + String(_MqttObj.state()));
         if (_IOTCloudUse)
-        {
-          _MqttObj.subscribe((_ProjectCode + "/DeviceToDevice").c_str());
-          _MqttObj.subscribe((_ProjectCode + "/ServerToDevice").c_str());
-          _MqttObj.subscribe((_ProjectCode + "/DeviceSetting").c_str());
-          _MqttObj.subscribe((_ProjectCode + "/Share").c_str());
-          _MqttObj.subscribe("Time/Tehran");
+        { 
+          // تپیک هایی که ابزار به آنها گوش می دهد
+          _MqttObj.subscribe((_ProjectCode + "/DeviceToDevice").c_str()); // تاپیک ارسال داده بین ابزارها که برای اجرای سناریو و یا تاچ پنل ها استفاده می شود و سرور بروکر هیچگونه پردازی روی این متد انجام نمی دهد
+          _MqttObj.subscribe((_ProjectCode + "/ServerToDevice").c_str()); // تاپیک ارسال داده به سرور بروکتر
+          _MqttObj.subscribe((_ProjectCode + "/DeviceSetting").c_str());  // تاپیک اصلی ارسال تنظیمات اختصاصی به ابزار
+          _MqttObj.subscribe((_ProjectCode + "/Share").c_str()); // تاپیک اشتراکی بین همه که ممکن است شما متناسب با نیاز خود از آن استفاده نمایید
+          _MqttObj.subscribe("Time/Tehran"); // متد گوش دادن به ساعت
         }
-        else
-        {
-          _MqttObj.subscribe((_ProjectCode + "/dvc").c_str());
-          _MqttObj.subscribe((_ProjectCode + "/appdvc").c_str());
-          _MqttObj.subscribe((_ProjectCode + "/common").c_str());
-          _MqttObj.subscribe((_ProjectCode + "/qc").c_str());
-        }
-        _MqttCon_IsConnected = true;
-        if (_IOT_ModemTimeout > 0)  _IOT_ModemTimeout = TIMER_JOB_DONE;
-        Dvc__CloudSendAllStatus(); // send last status
+        _MqttCon_IsConnected = true; // متغییر سراسری باری آنکه متوجه اتصال به سرور بروکر در نقاط مختلف کد نویسی شویم
+        if (_IOT_ModemTimeout > 0)  _IOT_ModemTimeout = TIMER_JOB_DONE; // تایم _IOT_ModemTimeOut برای بررسی مدام اتصال بر اساس زمان های  مختلف است
+        Dvc__CloudSendAllStatus(); // ارسال آخرین وضعیت تمام operationName
+                                  //  های ابزار به سرور ما اینجا صرفا 2 عدد operationName داریم که 2 عدد رله است
         Tools__LED_Warning(_Need_Extender ? WARNINGLED_CONNECT_IOTEXTENDER : WARNINGLED_CONNECT_IOT);
       }
-      //........................................................... Cant Reconnect
+      //........................................................... Can't Reconnect
       else
       {
-        _MqttCon_IsConnected = false;
+        _MqttCon_IsConnected = false; // تغییر متغییر سراسری 
         if (_IOT_ModemTimeout > 0) _IOT_ModemTimeout = TIMER_JOB_DONE;
         Tools__LED_Warning(WARNINGLED_AUTO);
 #if HARDWARE_GSM
@@ -381,11 +390,23 @@ void Mqtt__Connect()
 
 
 
-
+// متد اصلی دریافت داده از تاپیک های مختلف
 void Mqtt__OnRecieve(char *topic, uint8_t *payload, unsigned int length)
 {
+
+  // topic : مشخص می نماید از کدام تاپیک این پیام دریافت شده است
+  // ما توسط این مقدار و شرطهایی  که بر روی آن می گذاریم عملیات های خود را دسته بندی می نماییم.
+  // در ادامه راه بیشتر با این روند آشنا خواهید شد
+
+  // payload : پیام اصلی می باشد
   try
   {
+    // چون فرآیند OnRecive
+    // می تواند سنگین باشد و بیشتر از زمان keepalive
+    // زمان ببرد یک بار آن را صدا میزنیم
+    // درون همین متد کنترل کرده ایم که اگر زیر 10 ثانیه می باشد پس نیاز به ارسال پینگ به سرور نمی باشد
+    // اگر زیر زمان تعیین شده در keepalive 
+    // پینگ مورد نیاز به سمت سرور ارسال نشود سرور این اتصال را از دست رفته خواهد دید و اتصال شما را قطع خواهد کرد
     IOT__Call__Loop__MQTT();
 #if HARDWARE_GSM
     if (_Dvc_GSM.Type != T_GSM) DEBUG_SERIAL_PRINTLN("\r\nMqtt Rcv...\r\n    length : " + String(length) + "\r\n    Project/Topic: " + topic + (_IOTCloudUse ? "\r\n    _IOTCloudUse True" : "\r\n    _IOTCloudUse False"));
@@ -394,40 +415,44 @@ void Mqtt__OnRecieve(char *topic, uint8_t *payload, unsigned int length)
 #endif
 //----------------------------------------------------------------------------- Cloud MqttBroker
 //.................................... Check Project
-    String projectTopic = CA_ToString(topic);
-    int p = projectTopic.indexOf('/');
-    if (projectTopic.substring(0, p) != _ProjectCode)
-      return;
-    projectTopic = projectTopic.substring(p + 1);
-    if (_IOTCloudUse)
+    //
+    String projectTopic = CA_ToString(topic); // تبدیل کارکتر تاپیک به رشته و آماده کردن جهت شروع بررسی
+    int p = projectTopic.indexOf('/');        //  پیدا کردن مکان / 
+                                              // در تاپیک زیر تاپیک بصورت روبر است : projectCode/ServerToDevice
+                                              // با این روش کد پروژه و مسیر دوم استخراج می نماییم
+    // اولین مرحله بسیار مهم وامنیتی این است که شما مطین شوید این پیام برای پروژه شما است
+    // ***************** نکته *********************************
+    // در سمت سرور چک ها و روت بندی ها به خوبی رعایت شده است و احتمال ارسال یک پیام از یک گروژه دیگر به پروژه شما تقریبا برابر 0 است
+    // اما احتیاط شرط است
+    if (projectTopic.substring(0, p) != _ProjectCode) 
+      return; // اگر پروژه کد دریافتی از تاپیک با پروژه کدی که هنگام اضافه کردن ابزار به یک مکان برایش ارسال می شود و ذخیره می کند یکی نباشد بر می گردد و عملیات انجام نمی شود
+    projectTopic = projectTopic.substring(p + 1); // پیدا کردن آدرس دوم بعد از / که کد پروژه بود اول
+    if (_IOTCloudUse) // در توسعه های بعدی این مورد نیاز است چون قابلیت استفاده از گیت وی نیز اضافه می شود
     {
+      // شروع فرآیند شکستن JSON
+      // زیرا داده های خود را بصورت JSON
+      // ارسال می کند
       JsonDocument doc;
       doc.clear();
       deserializeJson(doc, payload);
       //.................................... Check Topic
-      if (projectTopic == "DeviceSetting")
+      // دقیقا از این مکان است که شروع به چک کردن تاپیک می نماییم و متناسب با هر تاپیک ادامه آنالیز خود را انجام می دهیم
+      if (projectTopic == "DeviceSetting") // تاپیکی که تنظیمات اختصاصی و سناریو داخلی به آن ارسال می شود
       {
+        // 
+        // payload تاپیک DeviceSetting 
+        // دارای مقادیر زیر باید باشد که از سمت سرور ارسال می شود.
         String opr = doc["operationName"].as<String>();
-        // DEBUG_SERIAL_PRINTLN("json opr :: " + opr);
+
+        // بخش سناریو داخلی در حال توسعه و تمیل است        
         if (opr == "save_scenario" || opr == "delete_scenario")
         {
           Config__ReceiveJson_ScenarioEdit(doc, (opr == "delete_scenario"));
         }
-        //........... Change Offline-Number
-#if HARDWARE_GSM
-        else if (opr == "changeOfflineNumber")
+        else if (opr == "save_setting") // اگر operationName == save_setting
+                                        // بود یعنی در حال تنظیم تنظیمات اختصاصی شما می باشد
         {
-          GSM__ChangeOfflineNumber(doc["newNumber"].as<String>());
-        }
-#endif
-        /*
-        else if (opr == "save_runsen" || opr == "delete_runsen") {
-          Config__ReceiveJson_RunsenEdit(doc, (opr == "delete_runsen"));
-        }
-    */
-        else if (opr == "save_setting")
-        {
-          if (doc["deviceSerial"].as<String>() == _SerialCloud)
+          if (doc["deviceSerial"].as<String>() == _SerialCloud) // اگر سریال ابزار با سریال ابزاری که تنظیمات برای آن می باشد یکی بود
           {
             String cmd, d = doc["value"].as<String>();
             DEBUG_SERIAL_PRINTLN("json value :: " + d);
@@ -459,19 +484,20 @@ void Mqtt__OnRecieve(char *topic, uint8_t *payload, unsigned int length)
           }
         }
       }
-      else if (projectTopic == "ServerToDevice")
+      else if (projectTopic == "ServerToDevice") // تاپیک ارسال دستورات به ابزار از طریق کاربر که در این تاپیک دریافت می کند
       {
-        String deviceSerial = doc["deviceSerial"].as<String>();
-        // DEBUG_SERIAL_PRINTLN("json deviceSerial :: " + deviceSerial);
+        // از آنجایی که وقتی سرور برای یک پروژه دستوری ارسال می کند، همه ابزارها آن را دریافت می کنند.
+        // نیاز است سریال ابزار را با سریال دستوری که ارسال شده است بررسی شوند
+        String deviceSerial = doc["deviceSerial"].as<String>(); // استخراج سریال از دستور باری آنکه بدانیم آیا این دستور ارسالی برای این ابزار است یا خیر
         String cmd = "";
         try
         {
-          if (doc["operationName"]) cmd = doc["operationName"].as<String>();
+          if (doc["operationName"]) cmd = doc["operationName"].as<String>(); // پرکردن operationName
         }
         catch (...) {}
         if (cmd != "")
         {
-          if (cmd == "firmware_update"){
+          if (cmd == "firmware_update"){ // اگر فریمور آپدیت بود مسیر زیر ادامه گیدا می کند
             String value = doc["value"].as<String>();
             if(value!=""){
               doc.clear();
@@ -479,10 +505,10 @@ void Mqtt__OnRecieve(char *topic, uint8_t *payload, unsigned int length)
               IOT__FirmwareUpdate(doc["link"].as<String>(), doc["cert"].as<String>(), doc["utc"].as<String>());
             }
           }
-          else if (cmd == "firmware_version"){
+          else if (cmd == "firmware_version"){ // اگر سرور ورژن فریمور پرسیده باشد مسیر زیر دنبال می شود
               Mqtt__Send("FirmwareVersion", "{'deviceSerial':'" + _SerialCloud + "','operationName':'firmware_version','value':'" + String(SOFTWARE_VERSION) + "'}", false);
           }
-          else if (cmd == "disable_scenario" || cmd == "enable_scenario" || cmd == "run_scenario")
+          else if (cmd == "disable_scenario" || cmd == "enable_scenario" || cmd == "run_scenario") // اگر سرور درخوات فعال یا غیر فعال سازی یا اجرای یک سناریو داخلی داده باشد مسیر زیر دنبال می شود
           {
             String nameCode = doc["value"].as<String>() + "_"; // To Find Scenario By Name-StartWith
             for (int i = MAX_SCENARIO - 1; i >= 0; i--)
@@ -496,7 +522,7 @@ void Mqtt__OnRecieve(char *topic, uint8_t *payload, unsigned int length)
               }
             }
           }
-          else if (cmd == "debugger")
+          else if (cmd == "debugger") // اگر سرور دستور دیباگر اراسل کرده باشد که بیشتر در بخش پشتیبانی از راه دور مورد نیاز است مسیر زیر دنبال می شود
           {
             if (doc["value"])
             {
@@ -523,35 +549,37 @@ void Mqtt__OnRecieve(char *topic, uint8_t *payload, unsigned int length)
             }
           }
         }
-        else if (doc["data"])
+        else if (doc["data"]) // این بخش اصلی جهت کنترل یک ابزار است که مسیر زیر دنبال می شود
         {
-          cmd = doc["data"].as<String>();
-          // DEBUG_SERIAL_PRINTLN("json data :: " + cmd);
+          cmd = doc["data"].as<String>(); // دستور شما که در فایل js
+                                          // { type: 'command', value: outPut };
+                                      
           if (cmd != "")
           {
             doc.clear();
             deserializeJson(doc, cmd);
-            String type = doc["type"].as<String>();
-            String value = doc["value"].as<String>();
+            String type = doc["type"].as<String>();   // مثلا می شود : command
+            String value = doc["value"].as<String>(); // مثلا می شود : ch1on
             //.................................... Extarct Data
-            if (type == "command")
+            if (type == "command") // اگر Command باشد یعنی دستور مستقیم برای شما است
             {
-              if (deviceSerial == _SerialCloud)
+              if (deviceSerial == _SerialCloud) // اگر سریال برابر با سریال همین ابزار باشد
               {
                 // DEBUG_SERIAL_PRINTLN("command by Own-Serial > Dvc__AnalyzeData");
-                Dvc__AnalyzeData(value); // Cloud Command Check
+                Dvc__AnalyzeData(value); // Cloud Command Check 
                 delay(70);
               }
             }
           }
         }
       }
-      else if (projectTopic == "DeviceToDevice")
+      else if (projectTopic == "DeviceToDevice") // اگر داده ارسالی بین ابزاری بود دقت نمایید هر داده دریافتی از سمت ابزار توسط سرور در این تاپیک منتشر می شود
+                                                // دلیل اینکار برای امنکان کنترل ابزار شرکت های مختلف توسط هم می باشد که در آینده در هنگام تنظیمات تخصصی و سناریو داخلی با آن روبرو می شویم
       {
         //.................................... Extarct Data
         String type = doc["type"].as<String>();
         String data = doc["data"].as<String>();
-          Dvc__AnalyzeData(data);
+        Dvc__AnalyzeData(data);
       }
       doc.clear();
     }
@@ -565,7 +593,8 @@ void Mqtt__OnRecieve(char *topic, uint8_t *payload, unsigned int length)
 
 
 
-
+// متد اصلی ارسال داده به سرور می باشد که همین داده به فایل js
+// جهت تجزیه و تحیلیل تحویل خواهیم داد
 void Mqtt__Send(String scope, String type, String data, String sender, bool offlineSupport = true)
 {
   try
@@ -610,26 +639,6 @@ void Mqtt__Send(String scope, String type, String data, String sender, bool offl
         DEBUG_SERIAL_PRINTLN("Mqtt Send... " + topic + "  >  " + data);
         if (_MqttObj.connected())
           _MqttObj.publish(topic.c_str(), data.c_str());
-      }
-      //----------------------------------------------------------------------------- Local MqttBroker
-      else
-      {
-        //............................. Checking Data
-        scope.toLowerCase();
-        String topic = _ProjectCode + "/" + scope;
-        char scopeArray[scope.length() + 1];
-        CA_CopyStr(scopeArray, scope);
-
-        char dataArray[data.length() + 1];
-        CA_CopyStr(dataArray, data);
-
-        char typeArray[type.length() + 1];
-        CA_CopyStr(typeArray, type);
-
-        String msg = Tools__DataToString(scopeArray, typeArray, dataArray, _MySenderId);
-        DEBUG_SERIAL_PRINTLN("Mqtt Send... " + topic + "  >  " + msg);
-        if (_MqttObj.connected())
-          _MqttObj.publish(topic.c_str(), msg.c_str());
       }
     }
   }
@@ -810,7 +819,6 @@ void IOT__Checker(void *param)
       }
       else if (_MqttCon_Steps == 3)
       {
-        // DEBUG_SERIAL_PRINTLN("############ _MqttCon_Steps 3 :: call Mqtt__Connect()");
         delay(1000);
         Mqtt__Connect();
       }
