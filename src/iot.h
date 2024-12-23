@@ -647,7 +647,7 @@ void Mqtt__Send(String topic, String data, bool offlineSupport = true)
   try
   {
     Tools__LED_Warning(WARNINGLED_AUTO);
-    //................................. Reject If Mesh Not Connected
+    //................................. Reject If data is empty
     if (data == "")  return;
     if(data[0]=='{'){
       if( data.indexOf('"')<0 && data.indexOf('\'')>=0 ) data.replace('\'', '"');
